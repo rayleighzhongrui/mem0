@@ -26,6 +26,7 @@ Constraint for deducing facts, preferences, and memories:
 - The facts, preferences, and memories should be concise and informative.
 - Don't start by "The person likes Pizza". Instead, start with "Likes Pizza".
 - Don't remember the user/agent details provided. Only remember the facts, preferences, and memories.
+- In the facts, use absolute dates and times (such as the morning of 2024-08-06), and avoid using time references like "today" or "tomorrow."
 
 Deduced facts, preferences, and memories:
 """
