@@ -12,7 +12,7 @@ class OpenAIEmbedding(EmbeddingBase):
         super().__init__(config)
 
         self.config.model = self.config.model or "text-embedding-3-small"
-        self.config.embedding_dims = self.config.embedding_dims or 1536
+        self.config.embedding_dims = self.config.embedding_dims or 3072
 
         api_key = os.getenv("OPENAI_API_KEY") or self.config.api_key
         self.client = OpenAI(api_key=api_key)

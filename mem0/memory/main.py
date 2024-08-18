@@ -16,7 +16,7 @@ from mem0.configs.prompts import MEMORY_DEDUCTION_PROMPT
 from mem0.memory.base import MemoryBase
 from mem0.memory.setup import setup_config
 from mem0.memory.storage import SQLiteManager
-from mem0.memory.telemetry import capture_event
+#from mem0.memory.telemetry import capture_event
 from mem0.memory.utils import get_update_memory_messages
 from mem0.utils.factory import LlmFactory, EmbedderFactory, VectorStoreFactory
 from mem0.configs.base import MemoryItem, MemoryConfig
@@ -39,7 +39,7 @@ class Memory(MemoryBase):
         self.collection_name = self.config.vector_store.config.collection_name
         self.currnet_time = datetime.now().strftime("%Y-%m-%d %H:%M")
 
-        capture_event("mem0.init", self)
+        #capture_event("mem0.init", self)
 
     @classmethod
     def from_config(cls, config_dict: Dict[str, Any]):
@@ -155,12 +155,12 @@ class Memory(MemoryBase):
                         "data": function_args.get("data"),
                     }
                 )
-                capture_event(
-                    "mem0.add.function_call",
-                    self,
-                    {"memory_id": function_result, "function_name": function_name},
-                )
-        capture_event("mem0.add", self)
+                #capture_event(
+                #    "mem0.add.function_call",
+                #    self,
+                #    {"memory_id": function_result, "function_name": function_name},
+                #)
+        #capture_event("mem0.add", self)
         return {"message": "ok"}
 
     def get(self, memory_id):
@@ -173,7 +173,7 @@ class Memory(MemoryBase):
         Returns:
             dict: Retrieved memory.
         """
-        capture_event("mem0.get", self, {"memory_id": memory_id})
+        #capture_event("mem0.get", self, {"memory_id": memory_id})
         memory = self.vector_store.get(vector_id=memory_id)
         if not memory:
             return None
@@ -228,7 +228,7 @@ class Memory(MemoryBase):
         if run_id:
             filters["run_id"] = run_id
 
-        capture_event("mem0.get_all", self, {"filters": len(filters), "limit": limit})
+        #capture_event("mem0.get_all", self, {"filters": len(filters), "limit": limit})
         memories = self.vector_store.list(filters=filters, limit=limit)
 
         excluded_keys = {
@@ -294,7 +294,7 @@ class Memory(MemoryBase):
         if run_id:
             filters["run_id"] = run_id
 
-        capture_event("mem0.search", self, {"filters": len(filters), "limit": limit})
+        #capture_event("mem0.search", self, {"filters": len(filters), "limit": limit})
         embeddings = self.embedding_model.embed(query)
         memories = self.vector_store.search(
             query=embeddings, limit=limit, filters=filters
@@ -351,7 +351,7 @@ class Memory(MemoryBase):
         Returns:
             dict: Updated memory.
         """
-        capture_event("mem0.update", self, {"memory_id": memory_id})
+        #capture_event("mem0.update", self, {"memory_id": memory_id})
         self._update_memory_tool(memory_id, data)
         return {"message": "Memory updated successfully!"}
 
@@ -362,7 +362,7 @@ class Memory(MemoryBase):
         Args:
             memory_id (str): ID of the memory to delete.
         """
-        capture_event("mem0.delete", self, {"memory_id": memory_id})
+        #capture_event("mem0.delete", self, {"memory_id": memory_id})
         self._delete_memory_tool(memory_id)
         return {"message": "Memory deleted successfully!"}
 
@@ -388,7 +388,7 @@ class Memory(MemoryBase):
                 "At least one filter is required to delete all memories. If you want to delete all memories, use the `reset()` method."
             )
 
-        capture_event("mem0.delete_all", self, {"filters": len(filters)})
+        #capture_event("mem0.delete_all", self, {"filters": len(filters)})
         memories = self.vector_store.list(filters=filters)[0]
         for memory in memories:
             self._delete_memory_tool(memory.id)
@@ -404,7 +404,7 @@ class Memory(MemoryBase):
         Returns:
             list: List of changes for the memory.
         """
-        capture_event("mem0.history", self, {"memory_id": memory_id})
+        #capture_event("mem0.history", self, {"memory_id": memory_id})
         return self.db.get_history(memory_id)
 
     def _create_memory_tool(self, data, metadata=None):
@@ -474,7 +474,7 @@ class Memory(MemoryBase):
         """
         self.vector_store.delete_col()
         self.db.reset()
-        capture_event("mem0.reset", self)
+        #capture_event("mem0.reset", self)
 
     def chat(self, query):
         raise NotImplementedError("Chat function not implemented yet.")
