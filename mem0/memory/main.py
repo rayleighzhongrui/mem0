@@ -4,9 +4,8 @@ import uuid
 import pytz
 from datetime import datetime
 from typing import Any, Dict
-
+import warnings
 from pydantic import ValidationError
-
 from mem0.llms.utils.tools import (
     ADD_MEMORY_TOOL,
     DELETE_MEMORY_TOOL,
@@ -37,6 +36,14 @@ class Memory(MemoryBase):
         self.llm = LlmFactory.create(self.config.llm.provider, self.config.llm.config)
         self.db = SQLiteManager(self.config.history_db_path)
         self.collection_name = self.config.vector_store.config.collection_name
+        self.version = self.config.version
+
+        self.enable_graph = False
+
+        if self.version == "v1.1" and self.config.graph_store.config:
+            from mem0.memory.main_graph import MemoryGraph
+            self.graph = MemoryGraph(self.config)
+            self.enable_graph = True
         self.currnet_time = datetime.now().strftime("%Y-%m-%d %H:%M")
 
         #capture_event("mem0.init", self)
@@ -86,6 +93,11 @@ class Memory(MemoryBase):
             filters["agent_id"] = metadata["agent_id"] = agent_id
         if run_id:
             filters["run_id"] = metadata["run_id"] = run_id
+
+        if not any(key in filters for key in ("user_id", "agent_id", "run_id")):
+            raise ValueError(
+                "One of the filters: user_id, agent_id or run_id is required!"
+            )
 
         if not prompt:
             prompt = MEMORY_DEDUCTION_PROMPT.format(user_input=data, metadata=metadata)
@@ -161,6 +173,14 @@ class Memory(MemoryBase):
                 #    {"memory_id": function_result, "function_name": function_name},
                 #)
         #capture_event("mem0.add", self)
+
+        if self.version == "v1.1" and self.enable_graph:
+            if user_id:
+                self.graph.user_id = user_id
+            else:
+                self.graph.user_id = "USER"
+            added_entities = self.graph.add(data)
+
         return {"message": "ok"}
 
     def get(self, memory_id):
@@ -231,16 +251,8 @@ class Memory(MemoryBase):
         #capture_event("mem0.get_all", self, {"filters": len(filters), "limit": limit})
         memories = self.vector_store.list(filters=filters, limit=limit)
 
-        excluded_keys = {
-            "user_id",
-            "agent_id",
-            "run_id",
-            "hash",
-            "data",
-            "created_at",
-            "updated_at",
-        }
-        return [
+        excluded_keys = {"user_id", "agent_id", "run_id", "hash", "data", "created_at", "updated_at"}
+        all_memories = [
             {
                 **MemoryItem(
                     id=mem.id,
@@ -268,6 +280,23 @@ class Memory(MemoryBase):
             }
             for mem in memories[0]
         ]
+        
+        if self.version == "v1.1":
+            if self.enable_graph:
+                graph_entities = self.graph.get_all()
+                return {"memories": all_memories, "entities": graph_entities}
+            else:
+                return {"memories" : all_memories}
+        else:
+            warnings.warn(
+                "The current get_all API output format is deprecated. "
+                "To use the latest format, set `api_version='v1.1'`. "
+                "The current format will be removed in mem0ai 1.1.0 and later versions.",
+                category=DeprecationWarning,
+                stacklevel=2
+            )
+            return all_memories
+    
 
     def search(
         self, query, user_id=None, agent_id=None, run_id=None, limit=100, filters=None
@@ -294,7 +323,12 @@ class Memory(MemoryBase):
         if run_id:
             filters["run_id"] = run_id
 
-        #capture_event("mem0.search", self, {"filters": len(filters), "limit": limit})
+        if not any(key in filters for key in ("user_id", "agent_id", "run_id")):
+            raise ValueError(
+                "One of the filters: user_id, agent_id or run_id is required!"
+            )
+
+        #capture_event("mem0.search", self, {"filters": len(filters), "limit": limit, "version": self.version})
         embeddings = self.embedding_model.embed(query)
         memories = self.vector_store.search(
             query=embeddings, limit=limit, filters=filters
@@ -310,7 +344,7 @@ class Memory(MemoryBase):
             "updated_at",
         }
 
-        return [
+        original_memories = [
             {
                 **MemoryItem(
                     id=mem.id,
@@ -339,6 +373,22 @@ class Memory(MemoryBase):
             }
             for mem in memories
         ]
+
+        if self.version == "v1.1":
+            if self.enable_graph:
+                graph_entities = self.graph.search(query)
+                return {"memories": original_memories, "entities": graph_entities}
+            else:
+                return {"memories" : original_memories}
+        else:
+            warnings.warn(
+                "The current get_all API output format is deprecated. "
+                "To use the latest format, set `api_version='v1.1'`. "
+                "The current format will be removed in mem0ai 1.1.0 and later versions.",
+                category=DeprecationWarning,
+                stacklevel=2
+            )
+            return original_memories
 
     def update(self, memory_id, data):
         """
@@ -392,7 +442,11 @@ class Memory(MemoryBase):
         memories = self.vector_store.list(filters=filters)[0]
         for memory in memories:
             self._delete_memory_tool(memory.id)
-        return {"message": "Memories deleted successfully!"}
+
+        if self.version == "v1.1" and self.enable_graph:
+            self.graph.delete_all()
+
+        return {'message': 'Memories deleted successfully!'}
 
     def history(self, memory_id):
         """
