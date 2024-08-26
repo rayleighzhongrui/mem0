@@ -129,7 +129,6 @@ class Memory(MemoryBase):
             for item in existing_memories
         ]
         logging.info(f"Total existing memories: {len(existing_memories)}")
-        print(f"已有记忆：{serialized_existing_memories}, 提取记忆：{extracted_memories}")
         messages = get_update_memory_messages(
             serialized_existing_memories, extracted_memories
         )
