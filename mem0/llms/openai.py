@@ -21,8 +21,8 @@ class OpenAILLM(LLMBase):
                 base_url=self.config.openrouter_base_url,
             )
         else:
-            api_key = os.getenv("OPENAI_API_KEY") or self.config.api_key
-            base_url = os.getenv("OPENAI_API_BASE") or self.config.openai_base_url
+            api_key = os.getenv("OPENAI_API_KEY") #or self.config.api_key
+            base_url = os.getenv("OPENAI_API_BASE") #or self.config.openai_base_url
             self.client = OpenAI(api_key=api_key, base_url=base_url)
 
     def _parse_response(self, response, tools):
@@ -103,6 +103,6 @@ class OpenAILLM(LLMBase):
         if tools:
             params["tools"] = tools
             params["tool_choice"] = tool_choice
-
+        #print(params)
         response = self.client.chat.completions.create(**params)
         return self._parse_response(response, tools)
