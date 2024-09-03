@@ -181,6 +181,130 @@ class Memory(MemoryBase):
             added_entities = self.graph.add(data)
 
         return {"message": "ok"}
+    def add_purely(
+        self,
+        data,
+        user_id=None,
+        agent_id=None,
+        run_id=None,
+        metadata=None,
+        filters=None,
+        prompt=None,
+    ):
+        """
+        Create a new memory.
+
+        Args:
+            data (str): Data to store in the memory.
+            user_id (str, optional): ID of the user creating the memory. Defaults to None.
+            agent_id (str, optional): ID of the agent creating the memory. Defaults to None.
+            run_id (str, optional): ID of the run creating the memory. Defaults to None.
+            metadata (dict, optional): Metadata to store with the memory. Defaults to None.
+            filters (dict, optional): Filters to apply to the search. Defaults to None.
+            prompt (str, optional): Prompt to use for memory deduction. Defaults to None.
+
+        Returns:
+            dict: Memory addition operation message.
+        """
+        if metadata is None:
+            metadata = {}
+        embeddings = self.embedding_model.embed(data)
+
+        filters = filters or {}
+        if user_id:
+            filters["user_id"] = metadata["user_id"] = user_id
+        if agent_id:
+            filters["agent_id"] = metadata["agent_id"] = agent_id
+        if run_id:
+            filters["run_id"] = metadata["run_id"] = run_id
+
+        if not any(key in filters for key in ("user_id", "agent_id", "run_id")):
+            raise ValueError(
+                "One of the filters: user_id, agent_id or run_id is required!"
+            )
+
+        if not prompt:
+            prompt = MEMORY_DEDUCTION_PROMPT.format(user_input=data, metadata=metadata)
+        extracted_memories = self.llm.generate_response(
+            messages=[
+                {
+                    "role": "system",
+                    "content": f"You are an expert at deducing facts, preferences and memories from unstructured text. now is {self.currnet_time}",
+                },
+                {"role": "user", "content": prompt},
+            ]
+        )
+        existing_memories = self.vector_store.search(
+            query=embeddings,
+            limit=5,
+            filters=filters,
+        )
+        existing_memories = [
+            MemoryItem(
+                id=mem.id,
+                score=mem.score,
+                metadata=mem.payload,
+                memory=mem.payload["data"],
+            )
+            for mem in existing_memories
+        ]
+        serialized_existing_memories = [
+            item.model_dump(include={"id", "memory", "score"})
+            for item in existing_memories
+        ]
+        logging.info(f"Total existing memories: {len(existing_memories)}")
+        messages = get_update_memory_messages(
+            serialized_existing_memories, extracted_memories
+        )
+        # Add tools for noop, add, update, delete memory.
+        tools = [ADD_MEMORY_TOOL]
+        response = self.llm.generate_response(messages=messages, tools=tools)
+        tool_calls = response["tool_calls"]
+
+        response = []
+        if tool_calls:
+            # Create a new memory
+            available_functions = {
+                "add_memory": self._create_memory_tool,
+                "update_memory": self._update_memory_tool,
+                "delete_memory": self._delete_memory_tool,
+            }
+            for tool_call in tool_calls:
+                function_name = tool_call["name"]
+                function_to_call = available_functions[function_name]
+                function_args = tool_call["arguments"]
+                logging.info(
+                    f"[openai_func] func: {function_name}, args: {function_args}"
+                )
+
+                # Pass metadata to the function if it requires it
+                if function_name in ["add_memory", "update_memory"]:
+                    function_args["metadata"] = metadata
+
+                function_result = function_to_call(**function_args)
+                # Fetch the memory_id from the response
+                response.append(
+                    {
+                        "id": function_result,
+                        "event": function_name.replace("_memory", ""),
+                        "data": function_args.get("data"),
+                    }
+                )
+                #capture_event(
+                #    "mem0.add.function_call",
+                #    self,
+                #    {"memory_id": function_result, "function_name": function_name},
+                #)
+        #capture_event("mem0.add", self)
+
+        if self.version == "v1.1" and self.enable_graph:
+            if user_id:
+                self.graph.user_id = user_id
+            else:
+                self.graph.user_id = "USER"
+            added_entities = self.graph.add(data)
+
+        return {"message": "ok"}#copy the memory.add funciton
 
     def get(self, memory_id):
         """
