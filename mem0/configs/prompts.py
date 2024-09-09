@@ -229,4 +229,5 @@ def get_update_memory_messages(retrieved_old_memory_dict, response_content):
     - If there is an update, the ID key should remain the same and only the value needs to be updated.
 
     Do not return anything except the JSON format.
+    Ensure there is no "JSON" string before the actual JSON data.
     """
