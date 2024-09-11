@@ -46,7 +46,7 @@ class Memory(MemoryBase):
             from mem0.memory.graph_memory import MemoryGraph
             self.graph = MemoryGraph(self.config)
             self.enable_graph = True
-        self.currnet_time = datetime.now().strftime("%Y-%m-%d %H:%M")
+        #self.currnet_time = datetime.now().strftime("%Y-%m-%d %H:%M")
 
         #capture_event("mem0.init", self)
 
@@ -137,7 +137,7 @@ class Memory(MemoryBase):
             messages_embeddings = self.embedding_model.embed(new_mem)
             existing_memories = self.vector_store.search(
                 query=messages_embeddings,
-                limit=5,
+                limit=10,
                 filters=filters,
             )
             for mem in existing_memories:
@@ -150,8 +150,12 @@ class Memory(MemoryBase):
             messages=[{"role": "user", "content": function_calling_prompt}],
             response_format={"type": "json_object"},
         )
-        print(f"New_memories_with_actions: {new_memories_with_actions}")
-        new_memories_with_actions = json.loads(new_memories_with_actions)
+        #print(f"New_memories_with_actions: {new_memories_with_actions}")
+        if "```json" in new_memories_with_actions:
+            cleaned_json_data = new_memories_with_actions.strip('```json').strip('```')
+        else:
+            cleaned_json_data = new_memories_with_actions
+        new_memories_with_actions = json.loads(cleaned_json_data)
 
         try:
             for resp in new_memories_with_actions["memory"]:
