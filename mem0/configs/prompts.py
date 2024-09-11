@@ -33,16 +33,16 @@ Input: There are branches in trees.
 Output: {{"facts" : []}}
 
 Input: Hi, I am looking for a restaurant in San Francisco.
-Output: {{"facts" : ['Looking for a restaurant in San Francisco']}}
+Output: {{"facts" : ["Looking for a restaurant in San Francisco"]}}
 
 Input: Yesterday, I had a meeting with John at 3pm. We discussed the new project.
-Output: {{"facts" : ['Had a meeting with John at 3pm', 'Discussed the new project']}}
+Output: {{"facts" : ["Had a meeting with John at 3pm", "Discussed the new project"]}}
 
 Input: Hi, my name is John. I am a software engineer.
-Output: {{"facts" : ['Name is John', 'Is a Software engineer']}}
+Output: {{"facts" : ["Name is John", "Is a Software engineer"]}}
 
 Input: Me favourite movies are Inception and Interstellar.
-Output: {{"facts" : ['Favourite movies are Inception and Interstellar']}}
+Output: {{"facts" : ["Favourite movies are Inception and Interstellar"]}}
 
 Input: I'm going for a run tomorrow evening(Now is 2024-05-01 10:00)
 Output: {{"facts" : ['Going for a run 2024-05-02 evening']}}
@@ -86,7 +86,7 @@ def get_update_memory_messages(retrieved_old_memory_dict, response_content):
                         "text" : "User is a software engineer"
                     }}
                 ]
-            - Retrieved facts: ['Name is John']
+            - Retrieved facts: ["Name is John"]
             - New Memory:
                 {{
                     "memory" : [
@@ -127,7 +127,7 @@ def get_update_memory_messages(retrieved_old_memory_dict, response_content):
                         "text" : "User likes to play cricket"
                     }}
                 ]
-            - Retrieved facts: ['Loves chicken pizza', 'Loves to play cricket with friends']
+            - Retrieved facts: ["Loves chicken pizza", "Loves to play cricket with friends"]
             - New Memory:
                 {{
                 "memory" : [
@@ -165,7 +165,7 @@ def get_update_memory_messages(retrieved_old_memory_dict, response_content):
                         "text" : "Loves cheese pizza"
                     }}
                 ]
-            - Retrieved facts: ['Dislikes cheese pizza']
+            - Retrieved facts: ["Dislikes cheese pizza"]
             - New Memory:
                 {{
                 "memory" : [
@@ -195,7 +195,7 @@ def get_update_memory_messages(retrieved_old_memory_dict, response_content):
                         "text" : "Loves cheese pizza"
                     }}
                 ]
-            - Retrieved facts: ['Name is John']
+            - Retrieved facts: ["Name is John"]
             - New Memory:
                 {{
                 "memory" : [
