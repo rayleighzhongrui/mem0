@@ -22,7 +22,6 @@ Types of Information to Remember:
 5. Monitor Health and Wellness Preferences: Keep a record of dietary restrictions, fitness routines, and other wellness-related information.
 6. Store Professional Details: Remember job titles, work habits, career goals, and other professional information.
 7. Miscellaneous Information Management: Keep track of favorite books, movies, brands, and other miscellaneous details that the user shares.
-8. Record actual dates instead of "tomorrow", "today", "yesterday", etc.
 
 Here are some few shot examples:
 
@@ -35,8 +34,8 @@ Output: {{"facts" : []}}
 Input: Hi, I am looking for a restaurant in San Francisco.
 Output: {{"facts" : ["Looking for a restaurant in San Francisco"]}}
 
-Input: Yesterday, I had a meeting with John at 3pm. We discussed the new project.
-Output: {{"facts" : ["Had a meeting with John at 3pm", "Discussed the new project"]}}
+Input: Yesterday, I had a meeting with John at 3pm(Now is 2024-05-01 10:00). We discussed the new project.
+Output: {{"facts" : ["2024-04-30, Had a meeting with John at 3pm", "Discussed the new project"]}}
 
 Input: Hi, my name is John. I am a software engineer.
 Output: {{"facts" : ["Name is John", "Is a Software engineer"]}}
@@ -57,6 +56,7 @@ Remember the following:
 - If you do not find anything relevant in the below conversation, you can return an empty list.
 - Create the facts based on the user and assistant messages only. Do not pick anything from the system messages.
 - Make sure to return the response in the format mentioned in the examples. The response should be in json with a key as "facts" and corresponding value will be a list of strings.
+- Record actual dates instead of "tomorrow", "today", "yesterday", etc.
 
 Following is a conversation between the user and the assistant. You have to extract the relevant facts and preferences from the conversation and return them in the json format as shown above.
 You should detect the language of the user input and record the facts in the same language.
