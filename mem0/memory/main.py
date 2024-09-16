@@ -10,7 +10,7 @@ from typing import Any, Dict
 import pytz
 from pydantic import ValidationError
 
-from mem0.configs.prompts import get_update_memory_messages
+from mem0.configs.prompts_ch import get_update_memory_messages
 from mem0.memory.base import MemoryBase
 from mem0.memory.setup import setup_config
 from mem0.memory.storage import SQLiteManager
@@ -144,7 +144,7 @@ class Memory(MemoryBase):
             messages=[{"role": "system", "content": system_prompt}, {"role": "user", "content": user_prompt}],
             response_format={"type": "json_object"},
         )
-
+        print(f"new memo:{response}")
         try:
             new_retrieved_facts = json.loads(response)[
                 "facts"
@@ -177,7 +177,7 @@ class Memory(MemoryBase):
         else:
             cleaned_json_data = new_memories_with_actions
         new_memories_with_actions = json.loads(cleaned_json_data)
-
+        print(f"to add memo:{new_memories_with_actions}")
         returned_memories = []
         try:
             for resp in new_memories_with_actions["memory"]:
