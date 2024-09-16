@@ -144,7 +144,6 @@ class Memory(MemoryBase):
             messages=[{"role": "system", "content": system_prompt}, {"role": "user", "content": user_prompt}],
             response_format={"type": "json_object"},
         )
-        print(f"new memo:{response}")
         try:
             new_retrieved_facts = json.loads(response)[
                 "facts"
@@ -171,7 +170,6 @@ class Memory(MemoryBase):
             messages=[{"role": "user", "content": function_calling_prompt}],
             response_format={"type": "json_object"},
         )
-        #print(f"New_memories_with_actions: {new_memories_with_actions}")
         if "```json" in new_memories_with_actions:
             cleaned_json_data = new_memories_with_actions.strip('```json').strip('```')
         else:
