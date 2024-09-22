@@ -151,7 +151,6 @@ class Memory(MemoryBase):
             system_prompt, user_prompt = self.system_message, self.template.render(message_type = 'prompt', prompt = parsed_messages)
         
         to_deduce_message = [{"role": "system", "content": system_prompt}, {"role": "user", "content": user_prompt}]
-        print(f"to deduce messages:{to_deduce_message}")
         response = self.llm.generate_response(
             messages = to_deduce_message,
             #messages=[{"role": "system", "content": system_prompt}, {"role": "user", "content": user_prompt}],
