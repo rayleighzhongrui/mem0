@@ -6,6 +6,7 @@ import uuid
 import warnings
 from datetime import datetime
 from typing import Any, Dict
+import os
 
 import pytz
 from pydantic import ValidationError
@@ -18,7 +19,7 @@ from mem0.memory.telemetry import capture_event
 from mem0.memory.utils import get_fact_retrieval_messages, parse_messages
 from mem0.utils.factory import LlmFactory, EmbedderFactory, VectorStoreFactory
 from mem0.configs.base import MemoryItem, MemoryConfig
-
+from jinja2 import Environment, BaseLoader, FileSystemLoader
 # Setup user config
 setup_config()
 
@@ -28,6 +29,7 @@ logger = logging.getLogger(__name__)
 class Memory(MemoryBase):
     def __init__(self, config: MemoryConfig = MemoryConfig()):
         self.config = config
+        self.currnet_time = datetime.now().strftime("%Y-%m-%d %H:%M")
 
         self.custom_prompt = self.config.custom_prompt
         self.embedding_model = EmbedderFactory.create(
@@ -47,9 +49,13 @@ class Memory(MemoryBase):
             from mem0.memory.graph_memory import MemoryGraph
             self.graph = MemoryGraph(self.config)
             self.enable_graph = True
-        #self.currnet_time = datetime.now().strftime("%Y-%m-%d %H:%M")
 
         #capture_event("mem0.init", self)
+        #load the prompt template 
+        template_path = os.path.join(os.path.dirname(__file__), '../configs')
+        self.env = Environment(loader=FileSystemLoader(template_path))
+        self.template = self.env.get_template('deduce.jinja2')
+        self.system_message = self.template.render(message_type='system', datetime = self.currnet_time)
 
 
     @classmethod
@@ -103,8 +109,11 @@ class Memory(MemoryBase):
                 "One of the filters: user_id, agent_id or run_id is required!"
             )
 
-        if isinstance(messages, str):
-            messages = [{"role": "user", "content": messages}]
+        #if isinstance(messages, str):
+        #    messages = [{"role": "user", "content": messages}]
+        if not isinstance(messages, list) or not all(isinstance(msg, dict) and 'role' in msg and 'content' in msg for msg in messages):
+            if isinstance(messages, str):
+                messages = [{"role": "user", "content": messages}]
 
         with concurrent.futures.ThreadPoolExecutor() as executor:
             future1 = executor.submit(self._add_to_vector_store, messages, metadata, filters)
@@ -138,14 +147,24 @@ class Memory(MemoryBase):
             system_prompt=self.custom_prompt
             user_prompt=f"Input: {parsed_messages}"
         else:
-            system_prompt, user_prompt = get_fact_retrieval_messages(parsed_messages)
-
+            #system_prompt, user_prompt = get_fact_retrieval_messages(parsed_messages)
+            system_prompt, user_prompt = self.system_message, self.template.render(message_type = 'prompt', prompt = parsed_messages)
+        
+        to_deduce_message = [{"role": "system", "content": system_prompt}, {"role": "user", "content": user_prompt}]
+        print(f"to deduce messages:{to_deduce_message}")
         response = self.llm.generate_response(
-            messages=[{"role": "system", "content": system_prompt}, {"role": "user", "content": user_prompt}],
+            messages = to_deduce_message,
+            #messages=[{"role": "system", "content": system_prompt}, {"role": "user", "content": user_prompt}],
             response_format={"type": "json_object"},
         )
+        #fix the format
+        if "```json" in response:
+            reformat_respone = response.strip('```json').strip('```')
+        else:
+            reformat_respone = response
+        #load the facts
         try:
-            new_retrieved_facts = json.loads(response)[
+            new_retrieved_facts = json.loads(reformat_respone)[
                 "facts"
             ]
         except Exception as e:
@@ -175,7 +194,7 @@ class Memory(MemoryBase):
         else:
             cleaned_json_data = new_memories_with_actions
         new_memories_with_actions = json.loads(cleaned_json_data)
-        print(f"to add memo:{new_memories_with_actions}")
+        #print(f"to add memo:{new_memories_with_actions}")
         returned_memories = []
         try:
             for resp in new_memories_with_actions["memory"]:
