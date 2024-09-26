@@ -19,7 +19,7 @@ from mem0.memory.telemetry import capture_event
 from mem0.memory.utils import get_fact_retrieval_messages, parse_messages
 from mem0.utils.factory import LlmFactory, EmbedderFactory, VectorStoreFactory
 from mem0.configs.base import MemoryItem, MemoryConfig
-from jinja2 import Environment, BaseLoader, FileSystemLoader
+#from jinja2 import Environment, BaseLoader, FileSystemLoader
 # Setup user config
 setup_config()
 
@@ -52,10 +52,10 @@ class Memory(MemoryBase):
 
         #capture_event("mem0.init", self)
         #load the prompt template 
-        template_path = os.path.join(os.path.dirname(__file__), '../configs')
-        self.env = Environment(loader=FileSystemLoader(template_path))
-        self.template = self.env.get_template('deduce.jinja2')
-        self.system_message = self.template.render(message_type='system', datetime = self.currnet_time)
+        #template_path = os.path.join(os.path.dirname(__file__), '../configs')
+        #self.env = Environment(loader=FileSystemLoader(template_path))
+        #self.template = self.env.get_template('deduce.jinja2')
+        #self.system_message = self.template.render(message_type='system', datetime = self.currnet_time)
 
 
     @classmethod
@@ -147,13 +147,12 @@ class Memory(MemoryBase):
             system_prompt=self.custom_prompt
             user_prompt=f"Input: {parsed_messages}"
         else:
-            #system_prompt, user_prompt = get_fact_retrieval_messages(parsed_messages)
-            system_prompt, user_prompt = self.system_message, self.template.render(message_type = 'prompt', prompt = parsed_messages)
-        
-        to_deduce_message = [{"role": "system", "content": system_prompt}, {"role": "user", "content": user_prompt}]
+            system_prompt, user_prompt = get_fact_retrieval_messages(parsed_messages)
+            #system_prompt, user_prompt = self.system_message, self.template.render(message_type = 'prompt', prompt = parsed_messages)
+        #to_deduce_message = [{"role": "system", "content": system_prompt}, {"role": "user", "content": user_prompt}]
         response = self.llm.generate_response(
-            messages = to_deduce_message,
-            #messages=[{"role": "system", "content": system_prompt}, {"role": "user", "content": user_prompt}],
+            #messages = to_deduce_message,
+            messages=[{"role": "system", "content": system_prompt}, {"role": "user", "content": user_prompt}],
             response_format={"type": "json_object"},
         )
         #fix the format
