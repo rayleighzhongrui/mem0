@@ -34,7 +34,7 @@
     {
       "name": "Discord",
       "icon": "discord",
-      "url": "https://mem0.ai/discord"
+      "url": "https://mem0.dev/DiD"
     },
     {
       "name": "GitHub",
@@ -64,7 +64,7 @@
         "platform/quickstart",
         {
           "group": "Features",
-          "pages": ["features/selective-memory", "features/custom-categories"]
+          "pages": ["features/selective-memory", "features/custom-categories", "features/direct-import"]
         }
       ]
     },
@@ -125,7 +125,9 @@
                 "components/embedders/models/openai",
                 "components/embedders/models/azure_openai",
                 "components/embedders/models/ollama",
-                "components/embedders/models/huggingface"
+                "components/embedders/models/huggingface",
+                "components/embedders/models/vertexai",
+                "components/embedders/models/gemini"
               ]
             }
           ]
@@ -143,7 +145,8 @@
         {
           "group": "Memory APIs",
           "pages": [
-            "api-reference/memory/get-memories",
+            "api-reference/memory/v1-get-memories",
+            "api-reference/memory/v2-get-memories",
             "api-reference/memory/add-memories",
             "api-reference/memory/delete-memories",
             "api-reference/memory/get-memory",
@@ -204,6 +207,7 @@
       "pages": [
         "integrations/multion",
         "integrations/autogen",
+        "integrations/langchain",
         "integrations/langgraph"
       ]
     },
@@ -219,7 +223,7 @@
     }
   ],
   "footerSocials": {
-    "discord": "https://mem0.ai/discord",
+    "discord": "https://mem0.dev/DiD",
     "x": "https://x.com/mem0ai",
     "github": "https://github.com/mem0ai",
     "linkedin": "https://www.linkedin.com/company/mem0/"
@@ -227,7 +231,7 @@
   "analytics": {
     "posthog": {
       "apiKey": "phc_hgJkUVJFYtmaJqrvf6CYN67TIQ8yhXAkWzUn9AMU4yX",
-      "apiHost": "https://us.i.posthog.com"
+      "apiHost": "https://mango.mem0.ai"
     }
   }
 }
