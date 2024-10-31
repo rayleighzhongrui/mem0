@@ -111,7 +111,7 @@ class MemoryGraph:
         )
 
         to_be_added = []
-
+        print(f"Memory updates: {memory_updates}")
         for item in memory_updates["tool_calls"]:
             if item["name"] == "add_graph_memory":
                 to_be_added.append(item["arguments"])

@@ -13,7 +13,7 @@ import pytz
 from pydantic import ValidationError
 
 from mem0.configs.base import MemoryConfig, MemoryItem
-from mem0.configs.prompts import get_update_memory_messages
+from mem0.configs.prompts_ch import get_update_memory_messages
 from mem0.memory.base import MemoryBase
 from mem0.memory.setup import setup_config
 from mem0.memory.storage import SQLiteManager
@@ -32,7 +32,8 @@ class Memory(MemoryBase):
         self.config = config
         self.currnet_time = datetime.now().strftime("%Y-%m-%d %H:%M")
 
-        self.custom_prompt = self.config.custom_prompt
+        self.custom_deduce_prompt = self.config.custom_deduce_prompt
+        self.custom_update_prompt = self.config.custom_update_prompt
         self.embedding_model = EmbedderFactory.create(self.config.embedder.provider, self.config.embedder.config)
         self.vector_store = VectorStoreFactory.create(
             self.config.vector_store.provider, self.config.vector_store.config
@@ -115,7 +116,6 @@ class Memory(MemoryBase):
         if not isinstance(messages, list) or not all(isinstance(msg, dict) and 'role' in msg and 'content' in msg for msg in messages):
             if isinstance(messages, str):
                 messages = [{"role": "user", "content": messages}]
-
         with concurrent.futures.ThreadPoolExecutor() as executor:
             future1 = executor.submit(self._add_to_vector_store, messages, metadata, filters)
             future2 = executor.submit(self._add_to_graph, messages, filters)
@@ -143,13 +143,14 @@ class Memory(MemoryBase):
     def _add_to_vector_store(self, messages, metadata, filters):
         parsed_messages = parse_messages(messages)
 
-        if self.custom_prompt:
-            system_prompt = self.custom_prompt
+        if self.custom_deduce_prompt:
+            system_prompt = self.custom_deduce_prompt
             user_prompt = f"Input: {parsed_messages}"
         else:
             system_prompt, user_prompt = get_fact_retrieval_messages(parsed_messages)
             #system_prompt, user_prompt = self.system_message, self.template.render(message_type = 'prompt', prompt = parsed_messages)
         #to_deduce_message = [{"role": "system", "content": system_prompt}, {"role": "user", "content": user_prompt}]
+        #print(f"to duduce:{user_prompt} \n")
         response = self.llm.generate_response(
             messages=[
                 {"role": "system", "content": system_prompt},
@@ -185,8 +186,10 @@ class Memory(MemoryBase):
                 retrieved_old_memory.append({"id": mem.id, "text": mem.payload["data"]})
 
         logging.info(f"Total existing memories: {len(retrieved_old_memory)}")
-
-        function_calling_prompt = get_update_memory_messages(retrieved_old_memory, new_retrieved_facts)
+        if self.custom_update_prompt:
+            function_calling_prompt = self.custom_update_prompt
+        else:
+            function_calling_prompt = get_update_memory_messages(retrieved_old_memory, new_retrieved_facts)
         new_memories_with_actions = self.llm.generate_response(
             messages=[{"role": "user", "content": function_calling_prompt}],
             response_format={"type": "json_object"},
@@ -496,7 +499,20 @@ class Memory(MemoryBase):
         #capture_event("mem0.delete", self, {"memory_id": memory_id})
         self._delete_memory(memory_id)
         return {"message": "Memory deleted successfully!"}
+    
+    def delete_multiple(self, memory_ids):
+        """
+        批量删除向量库记忆，不包含图数据库中的关系数据.
 
+        Args:
+            memory_ids (list): 要删除的记忆 ID 列表。
+        """
+        for memory_id in memory_ids:
+            self._delete_memory(memory_id)
+        logger.info(f"已删除 {len(memory_ids)} 个记忆")
+
+        return {"message": "记忆已成功删除！"}
+    
     def delete_all(self, user_id=None, agent_id=None, run_id=None):
         """
         Delete all memories.

@@ -110,6 +110,7 @@ def get_update_memory_messages(retrieved_old_memory_dict, response_content):
         If the retrieved fact contains information that conveys the same thing as the elements present in the memory, then you have to keep the fact which has the most information. 
         Example (a) -- if the memory contains "User likes to play cricket" and the retrieved fact is "Loves to play cricket with friends", then update the memory with the retrieved facts.
         Example (b) -- if the memory contains "Likes cheese pizza" and the retrieved fact is "Loves cheese pizza", then you do not need to update it because they convey the same information.
+        Example (c) — If the memory contains a schedule like "Tomorrow (October 17, 2024), I will watch Interstellar," and the retrieved fact is "Today (October 17, 2024), I watched Interstellar and enjoyed it," then the memory should be updated with the retrieved fact to reflect the latest status of the schedule.
         If the direction is to update the memory, then you have to update it.
         Please keep in mind while updating you have to keep the same ID.
         Please note to return the IDs in the output from the input IDs only and do not generate any new ID.
@@ -125,8 +126,12 @@ def get_update_memory_messages(retrieved_old_memory_dict, response_content):
                         "text" : "User is a software engineer"
                     }},
                     {{
-                        "id" : "0a14d8f0-e364-4f5c-b305-10da1f0d0878",
+                        "id" : "b4229775-d860-4ccb-983f-0f628ca112f5",
                         "text" : "User likes to play cricket"
+                    }},
+                    {{
+                        "id" : "0a14d8f0-e789-4f5c-b305-10da1f0d0878",
+                        "text" : "I will watch Interstellar tomorrow (October 17, 2024)"
                     }}
                 ]
             - Retrieved facts: ["Loves chicken pizza", "Loves to play cricket with friends"]
@@ -148,7 +153,12 @@ def get_update_memory_messages(retrieved_old_memory_dict, response_content):
                             "id" : "b4229775-d860-4ccb-983f-0f628ca112f5",
                             "text" : "Loves to play cricket with friends",
                             "event" : "UPDATE"
-                        }}
+                        }},
+                        {{
+                        "id" : "0a14d8f0-e789-4f5c-b305-10da1f0d0878",
+                        "text" : "Watched Interstellar on October 17, 2024, and really liked it",
+                        "event": "UPDATE"
+                    }}
                     ]
                 }}
 

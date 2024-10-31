@@ -48,10 +48,14 @@ class MemoryConfig(BaseModel):
         description="The version of the API",
         default="v1.0",
     )
-    custom_prompt: Optional[str] = Field(
-        description="Custom prompt for the memory",
+    custom_deduce_prompt: Optional[str] = Field(
+        description="Custom deduce prompt for the memory",
         default=None,
     )
+    custom_update_prompt: Optional[str] = Field(
+        description="Custom update prompt for the memory",
+        default=None,
+    ) 
 
 
 class AzureConfig(BaseModel):
