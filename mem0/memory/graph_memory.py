@@ -22,7 +22,7 @@ from mem0.graphs.tools import (
     UPDATE_MEMORY_STRUCT_TOOL_GRAPH,
     UPDATE_MEMORY_TOOL_GRAPH,
 )
-from mem0.graphs.utils import EXTRACT_ENTITIES_PROMPT, get_update_memory_messages
+from mem0.graphs.utils_en import EXTRACT_ENTITIES_PROMPT, get_update_memory_messages
 from mem0.utils.factory import EmbedderFactory, LlmFactory
 
 logger = logging.getLogger(__name__)
@@ -94,9 +94,8 @@ class MemoryGraph:
             extracted_entities = []
 
         logger.debug(f"Extracted entities: {extracted_entities}")
-
+        logger.debug(f"Search output: {search_output}")
         update_memory_prompt = get_update_memory_messages(search_output, extracted_entities)
-
         _tools = [UPDATE_MEMORY_TOOL_GRAPH, ADD_MEMORY_TOOL_GRAPH, NOOP_TOOL]
         if self.llm_provider in ["azure_openai_structured", "openai_structured"]:
             _tools = [
@@ -104,68 +103,133 @@ class MemoryGraph:
                 ADD_MEMORY_STRUCT_TOOL_GRAPH,
                 NOOP_STRUCT_TOOL,
             ]
-
+        logger.debug(f"Update memory prompt: {update_memory_prompt}")
         memory_updates = self.llm.generate_response(
             messages=update_memory_prompt,
             tools=_tools,
         )
-
+        logger.debug(f"Memory updates: {memory_updates}")
         to_be_added = []
-        print(f"Memory updates: {memory_updates}")
+        updated_entities = []
         for item in memory_updates["tool_calls"]:
             if item["name"] == "add_graph_memory":
                 to_be_added.append(item["arguments"])
             elif item["name"] == "update_graph_memory":
-                self._update_relationship(
-                    item["arguments"]["source"],
-                    item["arguments"]["destination"],
-                    item["arguments"]["relationship"],
-                    filters,
-                )
+                for entity in item["arguments"]["entities"]:
+                    updated_entity = self._update_relationship(
+                        entity["source"],
+                        entity["destination"],
+                        entity["relationship"],
+                        filters,
+                    )
+                    updated_entities.append(updated_entity)
             elif item["name"] == "noop":
                 continue
 
         returned_entities = []
-
+        
         for item in to_be_added:
-            source = item["source"].lower().replace(" ", "_")
-            source_type = item["source_type"].lower().replace(" ", "_")
-            relation = item["relationship"].lower().replace(" ", "_")
-            destination = item["destination"].lower().replace(" ", "_")
-            destination_type = item["destination_type"].lower().replace(" ", "_")
+            for entity in item["entities"]:
+                source = entity["source"].lower().replace(" ", "_")
+                source_type = entity["source_type"].lower().replace(" ", "_")
+                relation = entity["relationship"].lower().replace(" ", "_")
+                destination = entity["destination"].lower().replace(" ", "_")
+                destination_type = entity["destination_type"].lower().replace(" ", "_")
 
-            returned_entities.append({"source": source, "relationship": relation, "target": destination})
+                # 获取外属性
+                source_props = entity.get("source_properties", {})
+                relation_props = entity.get("relation_properties", {})
+                dest_props = entity.get("destination_properties", {})
 
-            # Create embeddings
-            source_embedding = self.embedding_model.embed(source)
-            dest_embedding = self.embedding_model.embed(destination)
+                # 创建嵌入向量
+                source_embedding = self.embedding_model.embed(source)
+                dest_embedding = self.embedding_model.embed(destination)
 
-            # Updated Cypher query to include node types and embeddings
-            cypher = f"""
-            MERGE (n:{source_type} {{name: $source_name, user_id: $user_id}})
-            ON CREATE SET n.created = timestamp(), n.embedding = $source_embedding
-            ON MATCH SET n.embedding = $source_embedding
-            MERGE (m:{destination_type} {{name: $dest_name, user_id: $user_id}})
-            ON CREATE SET m.created = timestamp(), m.embedding = $dest_embedding
-            ON MATCH SET m.embedding = $dest_embedding
-            MERGE (n)-[rel:{relation}]->(m)
-            ON CREATE SET rel.created = timestamp()
-            RETURN n, rel, m
-            """
+                # 构建基础属性
+                base_source_props = {
+                    "name": source,
+                    "user_id": filters["user_id"],
+                    "embedding": source_embedding,
+                    "created": "timestamp()"
+                }
+                base_dest_props = {
+                    "name": destination,
+                    "user_id": filters["user_id"],
+                    "embedding": dest_embedding,
+                    "created": "timestamp()"
+                }
+                base_rel_props = {
+                    "created": "timestamp()"
+                }
 
-            params = {
-                "source_name": source,
-                "dest_name": destination,
-                "source_embedding": source_embedding,
-                "dest_embedding": dest_embedding,
-                "user_id": filters["user_id"],
-            }
+                # 合并属性
+                source_props.update(base_source_props)
+                dest_props.update(base_dest_props)
+                relation_props.update(base_rel_props)
 
-            _ = self.graph.query(cypher, params=params)
+                # 构建属性字符串
+                source_props_str = ", ".join(f"{k}: ${k}" for k in source_props.keys())
+                dest_props_str = ", ".join(f"{k}: ${k}" for k in dest_props.keys())
+                rel_props_str = ", ".join(f"{k}: ${k}" for k in relation_props.keys())
+
+                # 更新 Cypher 查询
+                cypher = f"""
+                MERGE (n:{source_type} {{name: $source_name, user_id: $user_id}})
+                ON CREATE SET n = {{{source_props_str}}}
+                ON MATCH SET n.embedding = $source_embedding
+                MERGE (m:{destination_type} {{name: $dest_name, user_id: $user_id}})
+                ON CREATE SET m = {{{dest_props_str}}}
+                ON MATCH SET m.embedding = $dest_embedding
+                MERGE (n)-[rel:{relation}]->(m)
+                ON CREATE SET rel = {{{rel_props_str}}}
+                RETURN n, rel, m
+                """
+
+                # 合并所有参数
+                params = {
+                    **source_props,
+                    **dest_props,
+                    **relation_props,
+                    "source_name": source,
+                    "dest_name": destination,
+                    "user_id": filters["user_id"],
+                    "source_embedding": source_embedding,
+                    "dest_embedding": dest_embedding
+                }
+
+                _ = self.graph.query(cypher, params=params)
+
+                # 过滤掉 embedding 数据
+                filtered_source_props = {k: v for k, v in source_props.items() if k != "embedding"}
+                filtered_dest_props = {k: v for k, v in dest_props.items() if k != "embedding"}
+                filtered_rel_props = {k: v for k, v in relation_props.items() if k != "embedding"}
+
+                # 添加返回结果中，包含过滤后的属性信息
+                returned_entities.append({
+                    "source": {
+                        "name": source,
+                        "type": source_type,
+                        "properties": filtered_source_props
+                    },
+                    "relationship": {
+                        "type": relation,
+                        "properties": filtered_rel_props
+                    },
+                    "destination": {
+                        "name": destination,
+                        "type": destination_type,
+                        "properties": filtered_dest_props
+                    }
+                })
 
         logger.info(f"Added {len(to_be_added)} new memories to the graph")
+        logger.debug(f"Returned entities: {returned_entities}")
 
-        return returned_entities
+        # 返回所有操作的结果
+        return {
+            "added": returned_entities,
+            "updated": updated_entities
+        }
 
     def _search(self, query, filters, limit=100):
         _tools = [SEARCH_TOOL]
@@ -181,30 +245,64 @@ class MemoryGraph:
             ],
             tools=_tools,
         )
+        logger.debug(f"Search results from LLM: {search_results}")
 
         node_list = []
         relation_list = []
+        property_dict = {}  # 新增：存储节点和关系的属性
 
         for item in search_results["tool_calls"]:
             if item["name"] == "search":
                 try:
-                    node_list.extend(item["arguments"]["nodes"])
+                    for entity in item["arguments"]["entities"]:
+                        # 添加源节点和目标节点
+                        node_list.extend([entity["source"], entity["destination"]])
+                        # 添加关系
+                        relation_list.append(entity["relationship"])
+                        
+                        # 存储属性信息
+                        source_key = entity["source"].lower().replace(" ", "_")
+                        dest_key = entity["destination"].lower().replace(" ", "_")
+                        
+                        # 存储节点属性
+                        if "source_properties" in entity:
+                            property_dict[source_key] = entity["source_properties"]
+                        if "destination_properties" in entity:
+                            property_dict[dest_key] = entity["destination_properties"]
+                            
+                        # 存储关系属性
+                        if "relation_properties" in entity:
+                            rel_key = f"{source_key}_{entity['relationship']}_{dest_key}"
+                            property_dict[rel_key] = entity["relation_properties"]
+                            
                 except Exception as e:
                     logger.error(f"Error in search tool: {e}")
 
+        # 去重
         node_list = list(set(node_list))
+        logger.debug(f"Original node_list: {node_list}")
+        logger.debug(f"filters['user_id']: {filters['user_id']}")
+        
+        # 过滤掉 user_id
+        filtered_list = [node for node in node_list if node != filters["user_id"]]
+        
+        # 格式化
+        node_list = [node.lower().replace(" ", "_") for node in filtered_list]
+        
+        logger.debug(f"Processed node_list (removed user_id): {node_list}")
+
         relation_list = list(set(relation_list))
 
         node_list = [node.lower().replace(" ", "_") for node in node_list]
         relation_list = [relation.lower().replace(" ", "_") for relation in relation_list]
-
         logger.debug(f"Node list for search query : {node_list}")
 
         result_relations = []
 
         for node in node_list:
             n_embedding = self.embedding_model.embed(node)
-
+            
+            # 更新 Cypher 查询以包含属性
             cypher_query = """
             MATCH (n)
             WHERE n.embedding IS NOT NULL AND n.user_id = $user_id
@@ -214,7 +312,13 @@ class MemoryGraph:
                 sqrt(reduce(l2 = 0.0, i IN range(0, size($n_embedding)-1) | l2 + $n_embedding[i] * $n_embedding[i]))), 4) AS similarity
             WHERE similarity >= $threshold
             MATCH (n)-[r]->(m)
-            RETURN n.name AS source, elementId(n) AS source_id, type(r) AS relation, elementId(r) AS relation_id, m.name AS destination, elementId(m) AS destination_id, similarity
+            RETURN 
+                n.name AS source,
+                labels(n)[0] AS source_type,
+                type(r) AS relationship_type,
+                m.name AS destination,
+                labels(m)[0] AS destination_type,
+                similarity
             UNION
             MATCH (n)
             WHERE n.embedding IS NOT NULL AND n.user_id = $user_id
@@ -224,18 +328,38 @@ class MemoryGraph:
                 sqrt(reduce(l2 = 0.0, i IN range(0, size($n_embedding)-1) | l2 + $n_embedding[i] * $n_embedding[i]))), 4) AS similarity
             WHERE similarity >= $threshold
             MATCH (m)-[r]->(n)
-            RETURN m.name AS source, elementId(m) AS source_id, type(r) AS relation, elementId(r) AS relation_id, n.name AS destination, elementId(n) AS destination_id, similarity
+            RETURN 
+                m.name AS source,
+                labels(m)[0] AS source_type,
+                type(r) AS relationship_type,
+                n.name AS destination,
+                labels(n)[0] AS destination_type,
+                similarity
             ORDER BY similarity DESC
             LIMIT $limit
             """
+            #LIMIT $limit
             params = {
                 "n_embedding": n_embedding,
                 "threshold": self.threshold,
                 "user_id": filters["user_id"],
                 "limit": limit,
             }
-            ans = self.graph.query(cypher_query, params=params)
-            result_relations.extend(ans)
+                   # 添加详细的查询日志
+            logger.debug(f"Executing cypher query for node {node}:")
+            logger.debug(f"Query: {cypher_query}") 
+            results = self.graph.query(cypher_query, params=params)
+            logger.debug(f"Query results: {results}")
+            
+            for result in results:
+                result_relations.append({
+                    "source": result["source"],
+                    "source_type": result["source_type"],
+                    "relation": result["relationship_type"],
+                    "destination": result["destination"],
+                    "destination_type": result["destination_type"],
+                    "similarity": result["similarity"]
+                })
 
         return result_relations
 
@@ -283,37 +407,41 @@ class MemoryGraph:
 
     def get_all(self, filters, limit=100):
         """
-        Retrieves all nodes and relationships from the graph database based on optional filtering criteria.
-
-        Args:
-            filters (dict): A dictionary containing filters to be applied during the retrieval.
-            limit (int): The maximum number of nodes and relationships to retrieve. Defaults to 100.
-        Returns:
-            list: A list of dictionaries, each containing:
-                - 'contexts': The base data store response for each memory.
-                - 'entities': A list of strings representing the nodes and relationships
+        Retrieves all nodes and relationships from the graph database.
         """
-
-        # return all nodes and relationships
+        # 更新查询以获取完整的属性信息
         query = """
         MATCH (n {user_id: $user_id})-[r]->(m {user_id: $user_id})
-        RETURN n.name AS source, type(r) AS relationship, m.name AS target
+        RETURN n, type(r) as relationship_type, r, m
         LIMIT $limit
         """
         results = self.graph.query(query, params={"user_id": filters["user_id"], "limit": limit})
 
         final_results = []
         for result in results:
-            final_results.append(
-                {
-                    "source": result["source"],
-                    "relationship": result["relationship"],
-                    "target": result["target"],
+            # 转换节点和关系的所有属性
+            source_node = result["n"]
+            relationship = result["r"]
+            dest_node = result["m"]
+            
+            final_results.append({
+                "source": {
+                    "name": source_node["name"],
+                    "type": list(source_node.labels)[0],  # Neo4j节点的第一个标签
+                    "properties": dict(source_node)
+                },
+                "relationship": {
+                    "type": result["relationship_type"],
+                    "properties": dict(relationship)
+                },
+                "destination": {
+                    "name": dest_node["name"],
+                    "type": list(dest_node.labels)[0],
+                    "properties": dict(dest_node)
                 }
-            )
+            })
 
         logger.info(f"Retrieved {len(final_results)} relationships")
-
         return final_results
 
     def _update_relationship(self, source, target, relationship, filters):
@@ -357,7 +485,7 @@ class MemoryGraph:
         create_query = f"""
         MATCH (n1 {{name: $source, user_id: $user_id}}), (n2 {{name: $target, user_id: $user_id}})
         CREATE (n1)-[r:{relationship}]->(n2)
-        RETURN n1, r, n2
+        RETURN n1, type(r) as relationship_type, r, n2
         """
         result = self.graph.query(
             create_query,
@@ -366,3 +494,23 @@ class MemoryGraph:
 
         if not result:
             raise Exception(f"Failed to update or create relationship between {source} and {target}")
+        
+        # 添加返回结果
+        updated_entity = {
+            "source": {
+                "name": source,
+                "type": result[0]["n1"].labels[0],
+                "properties": dict(result[0]["n1"])
+            },
+            "relationship": {
+                "type": result[0]["relationship_type"],
+                "properties": dict(result[0]["r"])
+            },
+            "destination": {
+                "name": target,
+                "type": result[0]["n2"].labels[0],
+                "properties": dict(result[0]["n2"])
+            }
+        }
+        
+        return updated_entity

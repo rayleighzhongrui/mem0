@@ -245,7 +245,11 @@ class Memory(MemoryBase):
         return returned_memories
 
     def _add_to_graph(self, messages, filters):
-        added_entities = []
+        graph_results = {
+            "added": [],
+            "updated": []
+        }
+        
         if self.version == "v1.1" and self.enable_graph:
             if filters["user_id"]:
                 self.graph.user_id = filters["user_id"]
@@ -255,10 +259,19 @@ class Memory(MemoryBase):
                 self.graph.run_id = filters["run_id"]
             else:
                 self.graph.user_id = "USER"
+                
             data = "\n".join([msg["content"] for msg in messages if "content" in msg and msg["role"] != "system"])
-            added_entities = self.graph.add(data, filters)
+            results = self.graph.add(data, filters)
+            
+            if isinstance(results, dict):
+                graph_results["added"].extend(results.get("added", []))
+                graph_results["updated"].extend(results.get("updated", []))
+            else:
+                graph_results["added"].extend(results)
+                
+            logger.debug(f"Added graph entities: {graph_results}")
 
-        return added_entities
+        return graph_results
 
     def get(self, memory_id):
         """
@@ -419,7 +432,6 @@ class Memory(MemoryBase):
 
             original_memories = future_memories.result()
             graph_entities = future_graph_entities.result() if future_graph_entities else None
-
         if self.version == "v1.1":
             if self.enable_graph:
                 return {"results": original_memories, "relations": graph_entities}

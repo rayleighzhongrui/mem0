@@ -1,13 +1,12 @@
 import json
 import os
 from typing import Dict, List, Optional
-
+import logging
 from openai import OpenAI
-
 from mem0.configs.llms.base import BaseLlmConfig
 from mem0.llms.base import LLMBase
 
-
+logger = logging.getLogger(__name__)
 class OpenAIStructuredLLM(LLMBase):
     def __init__(self, config: Optional[BaseLlmConfig] = None):
         super().__init__(config)
@@ -82,6 +81,12 @@ class OpenAIStructuredLLM(LLMBase):
             params["tools"] = tools
             params["tool_choice"] = tool_choice
 
-        response = self.client.beta.chat.completions.parse(**params)
-
-        return self._parse_response(response, tools)
+        # 添加日志
+        logger.debug(f"OpenAI API request params: {json.dumps(params, ensure_ascii=False, indent=2)}")
+        
+        try:
+            response = self.client.beta.chat.completions.parse(**params)
+            return self._parse_response(response, tools)
+        except Exception as e:
+            logger.error(f"OpenAI API error: {str(e)}")
+            raise
